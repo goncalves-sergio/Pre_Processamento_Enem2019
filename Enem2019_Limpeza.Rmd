@@ -1,0 +1,253 @@
+---
+output: stevetemplates::pdf_article
+title: "Limpeza dos microdados do ENEM 2019"
+subtitle: "Preparação, Organização e estruturação dos dados de vestibulandos aptos no estado de São Paulo"
+
+author:
+- name: Sérgio Oliveira Gonçalves
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+  O exame nacional do ensino médio (ENEM) é a maior prova de admissão a educação superior do Brasil, é a principal forma de entrada nas universidades públicas brasileiras e é realizada pelo Instituto Nacional de Estudos e Pesquisas Educacionais Anísio Teixeira (INEP), autarquia vinculada ao Ministério da Educação (MEC). O exame foi criado a princípio para avaliar a qualidade do ensino médio no Brasil, em 2004 após a promulgação da lei Programa Universidade para Todos (ProUni) o ENEM se tornou meio para ingresso em universidades públicas e 10 anos depois já era o maior exame vestibular do país e em número de inscritos - 8 milhões de pessoas - o segundo maior do mundo.
+
+A arquitetura do banco de dados dos vestibulandos do ENEM 2019 está disposta em microdados. Microdados é uma estrutura de organização do banco de dados onde as informações estão detalhadas a nível da unidade de coleta, em geral no formato de questionários. A unidade de coleta depende do entrevistado nos questionários, no caso do CENSO demográfico do IBGE é o individuo residente no Brasil, no caso dos dados de vigilancia de óbito do DATASUS é a vitima do óbito e, por fim, no caso do ENEM a unidade é o vestibulando que se inscreveu no exame. A estrutura dos microdados é disposta de forma onde cada registro é um indivíduo e cada coluna trás informações específicas aplicáveis àquela unidade de análise.
+Assim, neste breve artigo iremos realizar a preparação, organização e estruturação dos microdados do enem 2019 cujo objetivo da limpeza é separar apenas os candidatos aptos a concorrer ao exame, a partir de uma rotina em linguagem R. Essa limpeza dos dados é fundamental pois no processo de elaboração e coleta dos dados podem ter havido inconsistencias, dados ausentes, outliers e entre outros problemas que podem afetar a análise inferencial dos dados. Para tanto, os microdados, dicionário e outros arquivos complementares foram coletados a partir do site do [INEP](https://www.gov.br/inep/pt-br/acesso-a-informacao/dados-abertos/microdados/enem).
+  
+  
+  
+# Importando e preparando os dados 
+
+  Para importar os arquivos utilizaremos um fluxo de trabalho recomendado pelo INEP para o carregamento dos dados em R. São apenas dois os pacotes a serem utilizados, o <code>data.table</code> para carregar e ler os dados de forma rápida, e o <code> dlpyr </code> poderosa ferramenta para manipulação dos dados.
+  
+
+```{r, echo=FALSE , warning=FALSE, message=FALSE}
+library (data.table)
+library(tidyverse)
+```
+
+
+```{r, warning=FALSE, message=FALSE, results='hide'}
+memory.limit(24576)
+
+setwd("D:/Meu repositório/Microdados_Enem2019/Pre_Processamento_Enem2019/microdados_enem_2019/DADOS")
+ENEM_2019 <- data.table::fread(input='MICRODADOS_ENEM_2019.csv',
+                               integer64='character',
+                               skip=0,  #Ler do inicio
+                               nrow=-1, #Ler todos os registros
+                               na.strings = " ", 
+                               showProgress = TRUE)
+```
+
+Visualizando as primeiras linhas temos a cara do banco de dados do ENEM 2019. A partir da visualização da tabela "ENEM_2019" e do dicionário de variáveis, observa-se variáveis que não serão úteis a princípio na nossa análise, como colunas referentes a dados dos pedidos de atendimento especializado, pedidos específicos para realização das provas, questionários socioeconômicos e entre outras variáveis. Foi observado também a ocorrência de um bug na variável do nome dos municípios onde o nome em algumas linhas não estão legíveis de forma clara.
+```{r}
+str(ENEM_2019)
+```
+
+
+Vamos proceder então com o recorte das colunas e registros de dados que são do nosso interesse, a começar filtrando apenas os registros do Estado de São Paulo. Dessa forma o recorte já eliminará mais da metade dos dados que não utilizaremos, ganhando perfomance, diminuindo capacidade de processamento e ganhando agilidade, conforme as práticas de tuning recomendam. 
+
+```{r}
+Enem_2019_Sp <- filter(ENEM_2019, SG_UF_RESIDENCIA =='SP')
+```
+ 
+ Agora selecionamos apenas as variáveis que são do nosso interesse:
+```{r}
+Enem_2019_Sp <- select(Enem_2019_Sp, NU_INSCRICAO, NU_ANO, NO_MUNICIPIO_RESIDENCIA,
+                       SG_UF_RESIDENCIA, NU_IDADE, TP_SEXO, TP_ESTADO_CIVIL, TP_COR_RACA,
+                       TP_NACIONALIDADE, TP_ESCOLA, TP_ENSINO, IN_TREINEIRO, CO_ESCOLA,
+                       TP_PRESENCA_CN, TP_PRESENCA_CH, TP_PRESENCA_LC, TP_PRESENCA_MT,
+                       NU_NOTA_CN, NU_NOTA_CH, NU_NOTA_LC, NU_NOTA_MT, TP_LINGUA,
+                       TP_STATUS_REDACAO, NU_NOTA_COMP1, NU_NOTA_COMP2, NU_NOTA_COMP3,
+                       NU_NOTA_COMP4, NU_NOTA_COMP5, NU_NOTA_REDACAO, IN_GESTANTE, IN_LACTANTE,
+                       IN_IDOSO
+                       )
+```
+
+
+
+Agora que preparamos os dados, vamos observar esse novo recorte através da função nativa do R <code> str </code>, tal função irá nos retornar uma breve descrição dos dados, quanto ao tamanho da matriz, as variáveis, alguns valores e seus respectivos tipos de variáveis.
+```{r}
+str(Enem_2019_Sp)
+```
+*Dicionário de variáveis*
+
+Aqui vai um breve resumo do dicionário de variáveis do banco de dados já recortado.
+
+* <code> NU_INSCRICAO</code> - Número de inscrição do candidato
+
+* <code>NU_ANO</code> - Ano do exame
+
+* <code>SG_UF_RESIDENCIA</code> - Unidade Federativa da residencia do candidato
+
+* <code>NU_IDADE</code> - Idade do candidato
+
+* <code>TP_SEXO </code> - Sexo do candidato (M- masculino, F- feminino)
+
+* <code>TP_ESTADO_CIVIL</code> - Estado civil do candidato (0 - não informado; 1- solteiro; 2- casado/ mora com companheiro; 3- divorciado; 4- viúvo)
+
+* <code>COR_RACA</code> Cor/raça do candidato com base na sua autodeclaração (0 - não declarado; 1- branca; 2- preta; 3-parda; 4-amarela; 5-indigena)
+
+* <code>TP_NACIONALIDADE</code> - Nacionalidade do candidato (0 - não informado; 1- brasileiro; 2- brasileiro naturalizado; 3- estrangeiro; 4- brasileiro nato, nascido no exterior)
+
+* <code>TP_ESCOLA</code> - Tipo de escola do Ensino Médio (1- Não respondeu; 2- pública; 3- privada; 4- exterior)
+
+* <code>CO_ESCOLA</code> - Código da escola
+
+* <code>TP_ENSINO</code> - Tipo de instituição que concluiu ou concluirá o Ensino Médio (1- regular; 2- educação especial; 3-Educação de jovens e adultos)
+
+* <code>IN_TREINEIRO</code> Indica se o inscrito fez a prova com o intuito de apenas testar seus conhecimentos (1- sim; 0- não)
+
+* <code>TP_PRESENCA_CN</code> - Presença na prova objetiva de Ciências da Natureza (0 - faltou a prova; 1 - Presente na prova; 2 - Eliminado da prova)
+
+* <code>TP_PRESENCA_CH</code> - Presença na prova de Ciências Humanas
+
+* <code>TP_PRESENCA_LC</code> - Presença na prova de Linguagens e Códigos
+
+* <code>TP_PRESENCA_MT</code> - Presença na prova de Matemática
+
+* <code>NU_NOTA_CN</code> - Nota da prova de Ciências da Natureza
+
+* <code>NU_NOTA_LC</code> - Nota da prova de Linguagens e Códigos
+
+* <code>NU_NOTA_CH</code> - Nota da prova de Ciências Humanas
+
+* <code>NU_NOTA_MT</code> - Nota da prova de Matemática
+
+* <code>TP_LINGUA</code> - Lingua Estrangeira (0- Inglês; 1- Espanhol)
+
+* <code>TP_STATUS_REDACAO</code> - Situação da redação do participante (1- Sem problemas; 2- Anulada; 3- Cópia do texto motivador; 4- Em branco; 6- Fuga ao tema; 7- Não atendimento ao tipo textual; 8- Texto insuficiente; 9- Parte desconectada)
+
+* <code>NU_NOTA_COMP1</code> - Demonstrar domínio da escrita formal da Língua Portuguesa
+
+* <code>NU_NOTA_COMP2</code> -  Compreender a proposta da redação e aplicar conceitos das várias áreas de conhecimento para desenvolver o tema.
+
+* <code>NU_NOTA_COMP3</code> - Selecionar, relacionar, organizar e interpretar informações, fatos, opiniões e argumentos em defesa de um ponto de vista.
+* <code>NU_NOTA_COMP4</code> - Demonstrar conhecimento dos mecanismos linguísticos necessários para a construção da argumentação.
+
+* <code>NU_NOTA_COMP5</code> - Elaborar proposta de intervenção para o problema abordado, respeitando os direitos humanos. 
+
+* <code>NU)NOTA_REDACAO</code> - Nota da prova de redação
+
+* <code>IN_GESTANTE</code> - Indicador de gestante (1- sim, 0- não)
+
+* <code>IN_LACTANTE</code> - Indicador de lactante (1- sim, 0- não)
+
+* <code>IN_IDOSO</code> - Indicador de inscrito idoso (1- sim, 0- não)
+
+
+Note que ainda é necessário realizar manipulações, há variáveis que não precisamos ou são indispensáveis para futura análise como <code>NU_ANO</code> e <code>SG_UF_RESIDENCIA</code> e entre outras. Além disso alguns nomes de variáveis são anti intuitivos, há valores ausentes, nem todos os inscritos são vestibulandos e nem todos os vestibulandos compareceram em ambos os dias.
+
+## Organização
+
+Passamos então a excluir as variáveis que não utilizamos, renomear as variáveis que utilizaremos e observar a estrutura dos dados e fazendo sua tipagem correta. 
+```{r}
+Enem_2019_Sp<-Enem_2019_Sp[, -c("NU_ANO", "SG_UF_RESIDENCIA", "TP_ESTADO_CIVIL")]
+Enem_2019_Sp<-rename(Enem_2019_Sp, NOTA_COMP2 = NU_NOTA_COMP2, NOTA_COMP3 = NU_NOTA_COMP3,
+                   NOTA_COMP4 = NU_NOTA_COMP4,NOTA_COMP5 = NU_NOTA_COMP5,
+                   NOTA_REDACAO = NU_NOTA_REDACAO, NOTA_CN = NU_NOTA_CN,
+                   NOTA_CH = NU_NOTA_CH, NOTA_LC = NU_NOTA_LC, 
+                   NOTA_MT =NU_NOTA_MT, INSCRICAO=NU_INSCRICAO,
+                   MUNICIPIO_RESIDENCIA= NO_MUNICIPIO_RESIDENCIA, 
+                   IDADE= NU_IDADE ,SEXO= TP_SEXO,COR_RACA= TP_COR_RACA, 
+                   NACIONALIDADE= TP_NACIONALIDADE,TIPO_ESCOLA= TP_ESCOLA, 
+                   TIPO_ENSINO=TP_ENSINO
+                   )
+glimpse(Enem_2019_Sp)
+```
+
+Dada a função <code>dplyr::glimpse()</code> podemos observar algumas informações sobre nossas variáveis, vamos focar em como está a estrutura dos dados. Estrutura de dados diz respeito a como os dados estão alocados na memória, aloca-los de forma super ou sub otimizada pode levar a perdas de perfomance do processamento, tal perfomance é ainda mais fundamental quando estamos diante de um banco de dados muito grande ou temos limitações de hardware onde o código vai rodar. Álém disso, estruturar os dados de forma correta deixa os dados mais organizados facilitando a operação deles tornando o código mais eficiente. 
+Observe que trabalhamos apenas com vetores, estes com 3 classes distintas. Existem diversos tipos de classes de dados, cabe inclusive uma discussão a parte sobre, porém observe que temos apenas 3 no nosso conjunto de dados são eles <code>chr</code>, <code>dbl</code> e <code>int</code>. 
+ 
+* <code>chr</code> ou character é um vetor cujo valor pode ser string ou numérico, não permitindo cálculos nem valores de ponto flutuante, ou seja, números com vírgula. 
+* <code>dbl</code> ou double é um vetor que aceita elementos de ponto flutuantes com grande precisão. Double vem de "double precision", referindo que a classe tem dupla precisão (64bits) em relação ao int (32 bits).
+* <code>int</code> ou integer é um vetor de tamanho compacto, ideal para vetores com números exatos e pequenos. 
+
+
+Vamos transformar então os seguintes vetores CO_ESCOLA, SEXO e COR_RACA em <code>factor</code> em variáveis categóricas. Podemos definir essa variável através das escalas de medidas estatísticas. No caso, está é a escala nominal, nessa escala não podemos fazer qualquer operação aritimética que a envolva ou definir ordens de grandeza, somente podemos afirmar que uma variável é igual ou diferente da outra, ou seja, categoriza-las.(BUSSAB e MORETIM, p. 17, 2017)
+
+```{r}
+Enem_2019_Sp$CO_ESCOLA<-as.factor(Enem_2019_Sp$CO_ESCOLA)
+Enem_2019_Sp$SEXO<-as.factor(Enem_2019_Sp$SEXO)
+Enem_2019_Sp$COR_RACA<-as.factor(Enem_2019_Sp$COR_RACA)
+
+```
+
+
+# Organizando
+
+Cada registro é único e representa cada inscrito no vestibular ENEM 2019, porém nem todos os inscritos são aptos a conconcorrer o exame, uma parte deles são treineiros, que declaradamente estão fazendo a prova sem intuito de concorrer a uma vaga numa universidade. Ademais, nem todos os inscritos regulares também estão aptos a concorrer o exame, além de ter que obedecer todas as regras de aplicação, o candidato ainda pode zerar alguma competência do exame ou não comparecer nos dias do exame. Assim vamos selecionar apenas inscritos presentes em todas as provas e os não treineiros.
+
+```{r}
+Vestibulandos <- Enem_2019_Sp %>% filter(IN_TREINEIRO==0)
+Vestibulandos$IN_TREINEIRO <- NULL
+
+Vestibulandos <-mutate(Vestibulandos, presenca= TP_PRESENCA_CN + TP_PRESENCA_CH + TP_PRESENCA_LC +TP_PRESENCA_MT
+       )
+Vestibulandos_Presentes <- Vestibulandos %>% filter(presenca==4)
+
+```
+
+
+
+##Valores faltantes
+
+Valores faltantes trazem um grande problema para a análise dos dados, ignora-los ou utilizar técnicas inadequadas podem levar pesquisa a conclusões erradas. Assim, o pesquisador deve fazer um grande esforço para preservar o máximo possível dos dados a fim de evitar distorções utilizando técnicas adequadas para tal conjunto de dados.
+
+"Determinar a abordagem analítica adequada para conjuntos de dados com observações incompletas é uma questão que pode ser bastante delicada, pois a utilização de métodos inadequados pode levar a conclusões erradas sobre o fenômeno na população. O desenvolvimento de métodos estatísticos direcionados a solucionar problemas de dados faltantes tem sido uma área de pesquisa bastante ativa nas últimas décadas" (N. Nunes et all, p.268, 2009))
+
+Ademais, como expresso em Wickham e Grolemund (2019), a natureza dos dados faltantes podem ser duas: (1) explicita: "um valor explícito é a presença de uma ausência", usualmente expresso em banco de dados como NA; (2) implicita: "um valor faltante implícito é a ausência de uma presença".(Wickham e Grolemund, p. 161, 2019). Um valor indefinido usualmente é expresso como NAN (not a number). Há inumeras ferramentas para trabalhar e tratar esse fenômeno no banco de dados, a melhor forma de saber qual é a mais adequada é conhecendo bem seu banco de dados e o objetivo do pré processamento. Sobre as técnicas estatísticas N. Nunes et all (2009) explica:
+
+[@cite] "[...], desde os anos 80 surgiram técnicas estatísticas que envolvem imputação de dados faltantes. Essas técnicas têm por objetivo "completar" os dados faltantes e possibilitar a análise com todos os indivíduos do estudo. As primeiras técnicas de imputação desenvolvidas envolviam métodos relativamente simples, tais como, substituição dos dados faltantes pela média, pela mediana, por interpolação ou até por regressão linear. Todas essas técnicas mencionadas permitem "preencher" os dados faltantes por meio do que se chama de imputação única, ou seja, o dado ausente é preenchido uma única vez e então se utiliza o banco de dados completo para as análises. (N. Nunes et all, p.269, 2009). [@cite]
+
+Para tanto, vamos observar em nosso dataset se  há a existência de dados faltantes, quais variáveis apresentam, e quantos são eles.
+```{r }
+sapply(Vestibulandos_Presentes, function(x) sum(is.nan(x))
+       )
+sapply(Vestibulandos_Presentes, function(x) sum(is.na(x))
+       )
+```
+
+Não foi observado valores indefinidos no dataset. Porém, observamos valores ausentes nele, e observe que os dados ausente são presentes nas variáveis do código da escola, tipo de ensino e nas notas e componentes da redação. Observe que há um padrão estranho nos dados ausentes das notas das provas e componentes da redação, todos tem o mesmo valor (586). Independente do que seja vamos exclui-los, uma vez que eles representam uma fração pequena (0,12%) dos dados, ao contrário das variáveis código da escola e o tipo de ensino, que serão mantidas. 
+
+```{r results='hide'}
+Vestibulandos_Presentes <- drop_na(Vestibulandos_Presentes, NOTA_CH
+                                   )
+sapply(Vestibulandos_Presentes, function(x) sum(is.na(x))
+)
+```
+
+A variável categórica TP_STATUS_REDACAO guarda informações a cerca da situação do candidato na prova de redação que anula ou zera sua redação. Assim somente os candidados que tem suas redações sem problemas estão aptos. 
+
+```{r}
+Vestibulandos_Aptos <- Vestibulandos_Presentes %>% filter (TP_STATUS_REDACAO==1)
+Vestibulandos_Aptos$presenca <- NULL
+```
+ 
+Por fim, exportaremos a tabela limpa e tratada em um formato .csv, para facilitar a manipulação dos dados para análises posteriores. 
+
+
+```{r}
+write.table(Vestibulandos_Aptos, file="Enem2019_limpo.csv", sep=",")
+```
+
+
+# Conclusão
+
+Logo, através deste breve artigo, propus um fluxo de trabalho para limpeza dos micro dados do ENEM 2019 com objetivo de filtrar os dados com apenas estudantes aptos a concorrer a uma vaga no ensino superior público. Observamos que é fundamental o delineamento claro do objetivo da limpeza dos dados na hora do pré processamento, pois, diferentes objetivos podem requerer fluxos diferentes de pré-processamento. No mais, a prática do pré processamento e limpeza dos dados constitui etapa elementar para construção de um trabalho que represente fielmente o conjunto de dados.
+
+# Referências
+
+Double: Double-Precision Vectors. In: R Documentation. Disponível em: https://www.rdocumentation.org/packages/base/versions/3.6.2/topics/double. Acesso em: 21 maio 2022.
+
+MORETTIN, P. A.; BUSSAB, W. O. Estatística Básica. 9a. ed. rev. e atual. São Paulo - SP: Saraiva, 2017. 550 p.
+
+NUNES, L. N. et al. Uso da imputação múltipla de dados faltantes: uma simulação utilizando dados epidemiológicos. Cadernos de Saúde Pública, Rio de Janeiro - RJ, ano 2, n. 25, p. 268-278, fev/2009. Disponível em: https://www.scielo.br/j/csp/a/XW3NwV7T5VL77WN7d7TJ3ZR/?lang=pt. Acesso em: 21 maio 2022.
+
+WICKHAM, H.; GROLEMUND, G. R para Data Science: Importe, Arrume, Transforme, Visualize e Modele Dados. 1a. ed. Rio de Janeiro - RJ: Alta Books, 2019. 528 p.
+
